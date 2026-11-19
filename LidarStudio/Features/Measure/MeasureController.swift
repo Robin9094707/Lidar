@@ -14,6 +14,10 @@ final class MeasureController: NSObject, ARSCNViewDelegate, ARSessionDelegate {
     var liveDistance: Float?
     var trackingMessage: String?
     var targetDistanceFromCamera: Float?
+    /// LiDAR-Tiefe in der Bildmitte und deren Konfidenz (0 niedrig … 2 hoch)
+    var depthConfidence: Int?
+    /// Steigung der Live-Strecke in Grad (0 = waagrecht, 90 = senkrecht)
+    var liveSlope: Float?
 
     private let contentNode = SCNNode()
     private let liveNode = SCNNode()
@@ -40,9 +44,13 @@ final class MeasureController: NSObject, ARSCNViewDelegate, ARSessionDelegate {
         if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
             config.sceneReconstruction = .mesh
         }
-        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.smoothedSceneDepth) {
+            // Zeitlich geglättete LiDAR-Tiefe: rauschärmer für Einzelmessungen
+            config.frameSemantics.insert(.smoothedSceneDepth)
+        } else if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
             config.frameSemantics.insert(.sceneDepth)
         }
+        config.isLightEstimationEnabled = true
         sceneView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
     }
 
@@ -136,7 +144,9 @@ final class MeasureController: NSObject, ARSCNViewDelegate, ARSessionDelegate {
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         frameCounter += 1
-        guard frameCounter % 2 == 0 else { return }
+        MainActor.assumeIsolated { SensorHub.shared.reportAR(frame: frame) }
+        let every = SensorHub.throttleFactor > 2 ? 4 : 2
+        guard frameCounter % every == 0 else { return }
         updateTarget(frame: frame)
     }
 
@@ -151,23 +161,72 @@ final class MeasureController: NSObject, ARSCNViewDelegate, ARSessionDelegate {
             hit = result.worldTransform.translation
         }
 
+        // LiDAR-Tiefe direkt in der Bildmitte (Median 5×5) als Präzisionsangabe
+        // und als Rückfallebene, wenn der Raycast nichts trifft.
+        let centerDepth = Self.centerDepth(frame)
+        depthConfidence = centerDepth?.confidence
+        if hit == nil, let d = centerDepth, d.confidence >= 1 {
+            hit = (frame.camera.transform * SIMD4<Float>(0, 0, -d.depth, 1)).xyz
+        }
+
         target = hit
         if hasTarget != (hit != nil) { hasTarget = hit != nil }
-        targetDistanceFromCamera = hit.map { simd_distance($0, frame.camera.transform.translation) }
+        targetDistanceFromCamera = centerDepth?.depth ?? hit.map { simd_distance($0, frame.camera.transform.translation) }
 
         liveNode.childNodes.forEach { $0.removeFromParentNode() }
         if let hit, let start = pendingStart {
             liveDistance = simd_distance(start, hit)
+            let v = hit - start
+            let horizontal = simd_length(SIMD2<Float>(v.x, v.z))
+            liveSlope = abs(atan2(v.y, horizontal)) * 180 / .pi
             let line = MeasureSceneBuilder.line(from: start, to: hit, color: UIColor.white.withAlphaComponent(0.85), radius: 0.0015)
             liveNode.addChildNode(line)
         } else {
             liveDistance = nil
+            liveSlope = nil
         }
         if let hit {
             let dot = MeasureSceneBuilder.sphere(at: hit, color: Theme.uiAccent)
             dot.opacity = 0.8
             liveNode.addChildNode(dot)
         }
+    }
+
+    private static func centerDepth(_ frame: ARFrame) -> (depth: Float, confidence: Int)? {
+        guard let data = frame.smoothedSceneDepth ?? frame.sceneDepth else { return nil }
+        let map = data.depthMap
+        CVPixelBufferLockBaseAddress(map, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(map, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(map) else { return nil }
+        let w = CVPixelBufferGetWidth(map)
+        let h = CVPixelBufferGetHeight(map)
+        let row = CVPixelBufferGetBytesPerRow(map)
+        var values: [Float] = []
+        values.reserveCapacity(25)
+        for dy in -2...2 {
+            for dx in -2...2 {
+                let x = w / 2 + dx
+                let y = h / 2 + dy
+                let d = base.load(fromByteOffset: y * row + x * 4, as: Float32.self)
+                if d.isFinite && d > 0 { values.append(d) }
+            }
+        }
+        guard !values.isEmpty else { return nil }
+        values.sort()
+        let depth = values[values.count / 2]
+
+        var confidence = 2
+        if let conf = data.confidenceMap {
+            CVPixelBufferLockBaseAddress(conf, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(conf, .readOnly) }
+            if let cb = CVPixelBufferGetBaseAddress(conf) {
+                let cRow = CVPixelBufferGetBytesPerRow(conf)
+                let cw = CVPixelBufferGetWidth(conf)
+                let ch = CVPixelBufferGetHeight(conf)
+                confidence = Int(cb.load(fromByteOffset: (ch / 2) * cRow + cw / 2, as: UInt8.self))
+            }
+        }
+        return (depth, confidence)
     }
 
     func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {

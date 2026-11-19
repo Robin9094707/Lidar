@@ -1,5 +1,6 @@
 import SwiftUI
 import QuickLook
+import MapKit
 
 struct ScanDetailView: View {
     let itemID: UUID
@@ -79,6 +80,10 @@ struct ScanDetailView: View {
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                }
+
+                if let env = item.environment {
+                    EnvironmentSection(environment: env, name: item.name, kind: item.kind)
                 }
 
                 filesSection(item)
@@ -299,6 +304,69 @@ struct ScanDetailView: View {
             withAnimation(.smooth) { prepared = result }
         } else {
             loadFailed = true
+        }
+    }
+}
+
+/// Aufnahmeort und Sensorwerte zum Zeitpunkt des Scans.
+struct EnvironmentSection: View {
+    let environment: EnvironmentSnapshot
+    let name: String
+    let kind: ScanKind
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Aufnahmeort").font(.headline)
+
+            if let lat = environment.latitude, let lon = environment.longitude {
+                let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+                Map(initialPosition: .region(MKCoordinateRegion(center: coordinate, latitudinalMeters: 350, longitudinalMeters: 350))) {
+                    Marker(name, systemImage: kind.icon, coordinate: coordinate)
+                        .tint(kind.tint)
+                }
+                .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
+                .frame(height: 170)
+                .clipShape(.rect(cornerRadius: 20))
+                .allowsHitTesting(false)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                row(environment.place.icon, "Umgebung", "\(environment.place.title) (\(Int(environment.placeConfidence * 100)) %)")
+                if let floor = environment.floor {
+                    row("building.2", "Etage", FloorName.name(floor))
+                }
+                if let alt = environment.altitude {
+                    row("mountain.2", "Höhe ü. NN", "\(Int(alt.rounded())) m")
+                }
+                if let p = environment.pressureKPa {
+                    row("barometer", "Luftdruck", "\((p * 10).formatted(.number.precision(.fractionLength(1)))) hPa")
+                }
+                if let h = environment.heading {
+                    row("safari", "Blickrichtung", "\(Int(h.rounded()))° \(SensorsView.direction(h))")
+                }
+                if let r = environment.roomHeight {
+                    row("arrow.up.and.down", "Raumhöhe", Units.length(r))
+                }
+                if let acc = environment.horizontalAccuracy {
+                    row("location", "GPS-Genauigkeit", "±\(Int(acc.rounded())) m")
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+    }
+
+    private func row(_ icon: String, _ label: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(.caption2).foregroundStyle(.secondary)
+                Text(value).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 0)
         }
     }
 }

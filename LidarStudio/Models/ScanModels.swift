@@ -118,4 +118,5 @@ struct ScanItem: Codable, Hashable, Identifiable {
     var stats: [ScanStat]
     var isFavorite: Bool = false
     var details: [String] = []
+    var environment: EnvironmentSnapshot? = nil
 }

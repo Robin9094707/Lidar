@@ -8,6 +8,8 @@ struct SettingsView: View {
     @AppStorage("pointDensity") private var pointDensity = 1
     @AppStorage("highConfidenceOnly") private var highConfidenceOnly = false
     @AppStorage("maxDepth") private var maxDepth = 4.0
+    @AppStorage("autoFloorCalibration") private var autoFloorCalibration = true
+    @AppStorage("floorHeight") private var floorHeight = 0.0
     @State private var confirmDeleteAll = false
     @State private var storageSize: Int64 = 0
 
@@ -70,6 +72,33 @@ struct SettingsView: View {
                     Text("Punktwolke")
                 } footer: {
                     Text("Feinere Dichte erzeugt mehr Details, aber größere Dateien. Der LiDAR-Sensor arbeitet bis ca. 5 m.")
+                }
+
+                Section {
+                    Toggle(isOn: $autoFloorCalibration) {
+                        Label("Auto-Kalibrierung draußen", systemImage: "figure.walk.departure")
+                    }
+                    Picker(selection: $floorHeight) {
+                        Text("Automatisch (LiDAR)").tag(0.0)
+                        Text("2,50 m").tag(2.5)
+                        Text("2,80 m").tag(2.8)
+                        Text("3,00 m").tag(3.0)
+                        Text("3,30 m").tag(3.3)
+                        Text("3,60 m").tag(3.6)
+                        Text("4,00 m").tag(4.0)
+                    } label: {
+                        Label("Etagenhöhe", systemImage: "building.2")
+                    }
+                    Button(role: .destructive) {
+                        SensorHub.shared.resetCalibration()
+                        Haptics.light()
+                    } label: {
+                        Label("Etagen-Kalibrierung zurücksetzen", systemImage: "arrow.counterclockwise")
+                    }
+                } header: {
+                    Text("Etage & Umgebung")
+                } footer: {
+                    Text("Die Etage wird aus Luftdruck, GPS-gestütztem Höhenmesser und Stockwerkzähler berechnet. Die Auto-Kalibrierung setzt nur bei eindeutig erkanntem Aufenthalt draußen (sehr gutes GPS, Gehen, keine Decke) das Erdgeschoss als Referenz.")
                 }
 
                 Section("Speicher") {

@@ -220,6 +220,7 @@ struct RoomScanView: View {
                 try encoder.encode(room).write(to: folder.appending(path: jsonName))
 
                 let summary = RoomSummary(room: room)
+                SensorHub.shared.reportRoomPlan(height: summary.height)
                 var stats: [ScanStat] = [
                     ScanStat(label: "Bodenfläche", icon: "square.dashed", value: Double(summary.floorArea), unit: .area),
                     ScanStat(label: "Wandlänge", icon: "ruler", value: Double(summary.wallLength), unit: .length),

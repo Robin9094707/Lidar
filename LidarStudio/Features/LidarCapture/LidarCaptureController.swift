@@ -59,6 +59,13 @@ final class LidarCaptureController: NSObject, ARSCNViewDelegate, ARSessionDelega
     private func configuration(reconstruct: Bool) -> ARWorldTrackingConfiguration {
         let config = ARWorldTrackingConfiguration()
         config.environmentTexturing = .none
+        // Horizontale Ebenen mit Klassifizierung (Boden/Decke) für Raumhöhe & Drinnen-Erkennung
+        config.planeDetection = [.horizontal]
+        config.isLightEstimationEnabled = true
+        if mode == .pointCloud {
+            // Bessere Farben für die Punktwolke
+            config.videoHDRAllowed = true
+        }
         if mode == .mesh, reconstruct {
             if ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification) {
                 config.sceneReconstruction = .meshWithClassification
@@ -151,6 +158,8 @@ final class LidarCaptureController: NSObject, ARSCNViewDelegate, ARSessionDelega
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         let now = frame.timestamp
+        MainActor.assumeIsolated { SensorHub.shared.reportAR(frame: frame) }
+        let throttle = SensorHub.throttleFactor
 
         if now - lastStatsTime > 0.4 {
             lastStatsTime = now
@@ -161,18 +170,20 @@ final class LidarCaptureController: NSObject, ARSCNViewDelegate, ARSessionDelega
             }
         }
 
-        guard mode == .pointCloud, isRecording, !isProcessing, now - lastSampleTime > 0.12,
+        // Abtastrate passt sich an Temperatur und Stromsparmodus an
+        guard mode == .pointCloud, isRecording, !isProcessing, now - lastSampleTime > 0.1 * throttle,
               let sample = DepthFrameSample(frame: frame) else { return }
         lastSampleTime = now
         isProcessing = true
-        let shouldPreview = now - lastPreviewTime > 0.6
+        let shouldPreview = now - lastPreviewTime > 0.5 * throttle
+        let previewLimit = throttle > 2 ? 100_000 : 220_000
         if shouldPreview { lastPreviewTime = now }
 
         processingQueue.async { [weak self, accumulator] in
             accumulator.integrate(sample)
             let total = accumulator.count
             let full = accumulator.isFull
-            let geometry = shouldPreview ? accumulator.previewGeometry(maxPoints: 220_000) : nil
+            let geometry = shouldPreview ? accumulator.previewGeometry(maxPoints: previewLimit) : nil
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isProcessing = false

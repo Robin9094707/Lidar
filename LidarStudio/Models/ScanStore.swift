@@ -65,6 +65,10 @@ final class ScanStore {
     // MARK: Bearbeiten
 
     func add(_ item: ScanItem) {
+        var item = item
+        if item.environment == nil {
+            item.environment = SensorHub.shared.snapshot()
+        }
         items.insert(item, at: 0)
         persist()
     }

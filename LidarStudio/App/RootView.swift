@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppRouter.self) private var router
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSplash = true
 
     var body: some View {
@@ -26,6 +27,16 @@ struct RootView: View {
         .background(Color.black)
         .fullScreenCover(item: $router.activeScan) { mode in
             ScanModeContainer(mode: mode)
+                .onAppear { SensorHub.shared.acquirePrecision() }
+                .onDisappear { SensorHub.shared.releasePrecision() }
+        }
+        .onAppear { SensorHub.shared.start() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                SensorHub.shared.start()
+            } else if phase == .background {
+                SensorHub.shared.stop()
+            }
         }
     }
 }
@@ -45,6 +56,9 @@ struct MainTabView: View {
                 LibraryView()
             }
             .badge(store.items.count)
+            Tab("Sensoren", systemImage: "sensor.fill", value: AppTab.sensors) {
+                SensorsView()
+            }
             Tab("Einstellungen", systemImage: "gearshape.fill", value: AppTab.settings) {
                 SettingsView()
             }

@@ -17,7 +17,7 @@ struct LidarStudioApp: App {
 }
 
 enum AppTab: Hashable {
-    case scan, library, settings
+    case scan, library, sensors, settings
 }
 
 @MainActor

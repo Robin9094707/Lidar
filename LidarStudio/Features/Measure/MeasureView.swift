@@ -1,4 +1,5 @@
 import SwiftUI
+import simd
 
 struct MeasureView: View {
     @Environment(\.dismiss) private var dismiss
@@ -76,6 +77,18 @@ struct MeasureView: View {
                 } else if let d = controller.targetDistanceFromCamera {
                     GlassPill(systemImage: "camera.metering.spot", text: Units.length(d), tint: .white)
                         .glassEffectID("live", in: glassNamespace)
+                }
+                if let slope = controller.liveSlope {
+                    GlassPill(systemImage: "angle", text: "\(Int(slope.rounded()))°", tint: Theme.mint)
+                        .glassEffectID("slope", in: glassNamespace)
+                }
+                if let c = controller.depthConfidence {
+                    GlassPill(
+                        systemImage: "dot.radiowaves.right",
+                        text: c >= 2 ? "Präzise" : (c == 1 ? "Mittel" : "Ungenau"),
+                        tint: c >= 2 ? Theme.mint : (c == 1 ? Theme.yellow : .red)
+                    )
+                    .glassEffectID("precision", in: glassNamespace)
                 }
                 switch controller.tool {
                 case .distance, .path:
@@ -263,7 +276,13 @@ struct MeasurementListSheet: View {
                     Section("Strecken") {
                         ForEach(controller.segments) { segment in
                             HStack {
-                                Label("Strecke \(segment.id + 1)", systemImage: "line.diagonal")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Label("Strecke \(segment.id + 1)", systemImage: "line.diagonal")
+                                    let v = segment.b - segment.a
+                                    Text("waagrecht \(Units.length(simd_length(SIMD2<Float>(v.x, v.z)))) · senkrecht \(Units.length(abs(v.y)))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Spacer()
                                 Text(Units.length(segment.length))
                                     .monospacedDigit()
