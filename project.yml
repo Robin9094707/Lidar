@@ -1,0 +1,67 @@
+name: LidarStudio
+options:
+  bundleIdPrefix: de.lidarstudio
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: de
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  LidarStudio:
+    type: application
+    platform: iOS
+    sources:
+      - path: LidarStudio
+        excludes:
+          - "Resources/generate_icon.py"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.lidarstudio.app
+        PRODUCT_NAME: LidarStudio
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: LidarStudio/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    info:
+      path: LidarStudio/Info.plist
+      properties:
+        CFBundleDisplayName: LiDAR Studio
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        NSCameraUsageDescription: LiDAR Studio nutzt Kamera und LiDAR-Sensor, um Räume, Objekte und Punktwolken in 3D zu erfassen und zu vermessen.
+        UIRequiredDeviceCapabilities: [arkit]
+        UIUserInterfaceStyle: Dark
+        UIRequiresFullScreen: true
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown]
+
+schemes:
+  LidarStudio:
+    build:
+      targets:
+        LidarStudio: all
+    run:
+      config: Debug
+    archive:
+      config: Release
